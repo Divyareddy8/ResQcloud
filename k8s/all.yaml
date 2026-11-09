@@ -1,0 +1,314 @@
+apiVersion: v1
+kind: Namespace
+metadata: {name: resqcloud}
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata: {name: shard0, namespace: resqcloud}
+spec:
+  serviceName: shard0
+  replicas: 1
+  selector:
+    matchLabels: {app: shard0}
+  template:
+    metadata:
+      labels: {app: shard0}
+    spec:
+      containers:
+      - name: storage
+        image: YOUR_DOCKERHUB_USERNAME/resqcloud:latest
+        command: ["uvicorn", "backend.storage:app", "--host", "0.0.0.0", "--port", "8000"]
+        env:
+        - {name: NODE_ID, value: "shard0"}
+        - {name: DB_PATH, value: "/data/db.sqlite"}
+        volumeMounts:
+        - {name: data, mountPath: /data}
+  volumeClaimTemplates:
+  - metadata: {name: data}
+    spec:
+      accessModes: [ReadWriteOnce]
+      resources:
+        requests: {storage: 1Gi}
+---
+apiVersion: v1
+kind: Service
+metadata: {name: shard0, namespace: resqcloud}
+spec:
+  selector: {app: shard0}
+  ports: [{port: 8000}]
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata: {name: replica0, namespace: resqcloud}
+spec:
+  serviceName: replica0
+  replicas: 1
+  selector:
+    matchLabels: {app: replica0}
+  template:
+    metadata:
+      labels: {app: replica0}
+    spec:
+      containers:
+      - name: storage
+        image: YOUR_DOCKERHUB_USERNAME/resqcloud:latest
+        command: ["uvicorn", "backend.storage:app", "--host", "0.0.0.0", "--port", "8000"]
+        env:
+        - {name: NODE_ID, value: "replica0"}
+        - {name: DB_PATH, value: "/data/db.sqlite"}
+        volumeMounts:
+        - {name: data, mountPath: /data}
+  volumeClaimTemplates:
+  - metadata: {name: data}
+    spec:
+      accessModes: [ReadWriteOnce]
+      resources:
+        requests: {storage: 1Gi}
+---
+apiVersion: v1
+kind: Service
+metadata: {name: replica0, namespace: resqcloud}
+spec:
+  selector: {app: replica0}
+  ports: [{port: 8000}]
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata: {name: shard1, namespace: resqcloud}
+spec:
+  serviceName: shard1
+  replicas: 1
+  selector:
+    matchLabels: {app: shard1}
+  template:
+    metadata:
+      labels: {app: shard1}
+    spec:
+      containers:
+      - name: storage
+        image: YOUR_DOCKERHUB_USERNAME/resqcloud:latest
+        command: ["uvicorn", "backend.storage:app", "--host", "0.0.0.0", "--port", "8000"]
+        env:
+        - {name: NODE_ID, value: "shard1"}
+        - {name: DB_PATH, value: "/data/db.sqlite"}
+        volumeMounts:
+        - {name: data, mountPath: /data}
+  volumeClaimTemplates:
+  - metadata: {name: data}
+    spec:
+      accessModes: [ReadWriteOnce]
+      resources:
+        requests: {storage: 1Gi}
+---
+apiVersion: v1
+kind: Service
+metadata: {name: shard1, namespace: resqcloud}
+spec:
+  selector: {app: shard1}
+  ports: [{port: 8000}]
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata: {name: replica1, namespace: resqcloud}
+spec:
+  serviceName: replica1
+  replicas: 1
+  selector:
+    matchLabels: {app: replica1}
+  template:
+    metadata:
+      labels: {app: replica1}
+    spec:
+      containers:
+      - name: storage
+        image: YOUR_DOCKERHUB_USERNAME/resqcloud:latest
+        command: ["uvicorn", "backend.storage:app", "--host", "0.0.0.0", "--port", "8000"]
+        env:
+        - {name: NODE_ID, value: "replica1"}
+        - {name: DB_PATH, value: "/data/db.sqlite"}
+        volumeMounts:
+        - {name: data, mountPath: /data}
+  volumeClaimTemplates:
+  - metadata: {name: data}
+    spec:
+      accessModes: [ReadWriteOnce]
+      resources:
+        requests: {storage: 1Gi}
+---
+apiVersion: v1
+kind: Service
+metadata: {name: replica1, namespace: resqcloud}
+spec:
+  selector: {app: replica1}
+  ports: [{port: 8000}]
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata: {name: shard2, namespace: resqcloud}
+spec:
+  serviceName: shard2
+  replicas: 1
+  selector:
+    matchLabels: {app: shard2}
+  template:
+    metadata:
+      labels: {app: shard2}
+    spec:
+      containers:
+      - name: storage
+        image: YOUR_DOCKERHUB_USERNAME/resqcloud:latest
+        command: ["uvicorn", "backend.storage:app", "--host", "0.0.0.0", "--port", "8000"]
+        env:
+        - {name: NODE_ID, value: "shard2"}
+        - {name: DB_PATH, value: "/data/db.sqlite"}
+        volumeMounts:
+        - {name: data, mountPath: /data}
+  volumeClaimTemplates:
+  - metadata: {name: data}
+    spec:
+      accessModes: [ReadWriteOnce]
+      resources:
+        requests: {storage: 1Gi}
+---
+apiVersion: v1
+kind: Service
+metadata: {name: shard2, namespace: resqcloud}
+spec:
+  selector: {app: shard2}
+  ports: [{port: 8000}]
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata: {name: replica2, namespace: resqcloud}
+spec:
+  serviceName: replica2
+  replicas: 1
+  selector:
+    matchLabels: {app: replica2}
+  template:
+    metadata:
+      labels: {app: replica2}
+    spec:
+      containers:
+      - name: storage
+        image: YOUR_DOCKERHUB_USERNAME/resqcloud:latest
+        command: ["uvicorn", "backend.storage:app", "--host", "0.0.0.0", "--port", "8000"]
+        env:
+        - {name: NODE_ID, value: "replica2"}
+        - {name: DB_PATH, value: "/data/db.sqlite"}
+        volumeMounts:
+        - {name: data, mountPath: /data}
+  volumeClaimTemplates:
+  - metadata: {name: data}
+    spec:
+      accessModes: [ReadWriteOnce]
+      resources:
+        requests: {storage: 1Gi}
+---
+apiVersion: v1
+kind: Service
+metadata: {name: replica2, namespace: resqcloud}
+spec:
+  selector: {app: replica2}
+  ports: [{port: 8000}]
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: api, namespace: resqcloud}
+spec:
+  replicas: 2
+  selector:
+    matchLabels: {app: api}
+  template:
+    metadata:
+      labels: {app: api}
+    spec:
+      containers:
+      - name: api
+        image: YOUR_DOCKERHUB_USERNAME/resqcloud:latest
+        command: ["uvicorn", "backend.api:app", "--host", "0.0.0.0", "--port", "8000"]
+        resources:
+          requests: {cpu: 100m, memory: 128Mi}
+---
+apiVersion: v1
+kind: Service
+metadata: {name: api, namespace: resqcloud}
+spec:
+  selector: {app: api}
+  ports: [{port: 8000}]
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: coordinator, namespace: resqcloud}
+spec:
+  replicas: 1
+  selector:
+    matchLabels: {app: coordinator}
+  template:
+    metadata:
+      labels: {app: coordinator}
+    spec:
+      containers:
+      - name: coordinator
+        image: YOUR_DOCKERHUB_USERNAME/resqcloud:latest
+        command: ["uvicorn", "backend.coordinator:app", "--host", "0.0.0.0", "--port", "8000"]
+        resources:
+          requests: {cpu: 100m, memory: 128Mi}
+---
+apiVersion: v1
+kind: Service
+metadata: {name: coordinator, namespace: resqcloud}
+spec:
+  selector: {app: coordinator}
+  ports: [{port: 8000}]
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: matcher, namespace: resqcloud}
+spec:
+  replicas: 1
+  selector:
+    matchLabels: {app: matcher}
+  template:
+    metadata:
+      labels: {app: matcher}
+    spec:
+      containers:
+      - name: matcher
+        image: YOUR_DOCKERHUB_USERNAME/resqcloud:latest
+        command: ["python", "-m", "backend.matcher"]
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: rabbitmq, namespace: resqcloud}
+spec:
+  replicas: 1
+  selector:
+    matchLabels: {app: rabbitmq}
+  template:
+    metadata:
+      labels: {app: rabbitmq}
+    spec:
+      containers:
+      - name: rabbitmq
+        image: rabbitmq:3.13-management-alpine
+---
+apiVersion: v1
+kind: Service
+metadata: {name: rabbitmq, namespace: resqcloud}
+spec:
+  selector: {app: rabbitmq}
+  ports: [{port: 5672, name: amqp}, {port: 15672, name: management}]
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata: {name: api-hpa, namespace: resqcloud}
+spec:
+  scaleTargetRef: {apiVersion: apps/v1, kind: Deployment, name: api}
+  minReplicas: 2
+  maxReplicas: 5
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target: {type: Utilization, averageUtilization: 70}

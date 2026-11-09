@@ -1,0 +1,11 @@
+- name: Install Docker and prerequisites (Ubuntu)
+  ansible.builtin.apt:
+    name: [docker.io, docker-compose-v2, python3-pip, curl]
+    state: present
+    update_cache: true
+  when: ansible_os_family == 'Debian'
+- name: Start Docker daemon
+  ansible.builtin.service:
+    name: docker
+    state: started
+    enabled: true

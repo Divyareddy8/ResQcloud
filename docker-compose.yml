@@ -1,0 +1,68 @@
+x-storage: &storage
+  build: .
+  command: uvicorn backend.storage:app --host 0.0.0.0 --port 8000
+  restart: unless-stopped
+  networks: [resq]
+services:
+  shard0:
+    <<: *storage
+    environment: [NODE_ID=shard0, DB_PATH=/data/db.sqlite, SERVICE=shard0]
+    volumes: [shard0-data:/data]
+  replica0:
+    <<: *storage
+    environment: [NODE_ID=replica0, DB_PATH=/data/db.sqlite, SERVICE=replica0]
+    volumes: [replica0-data:/data]
+  shard1:
+    <<: *storage
+    environment: [NODE_ID=shard1, DB_PATH=/data/db.sqlite, SERVICE=shard1]
+    volumes: [shard1-data:/data]
+  replica1:
+    <<: *storage
+    environment: [NODE_ID=replica1, DB_PATH=/data/db.sqlite, SERVICE=replica1]
+    volumes: [replica1-data:/data]
+  shard2:
+    <<: *storage
+    environment: [NODE_ID=shard2, DB_PATH=/data/db.sqlite, SERVICE=shard2]
+    volumes: [shard2-data:/data]
+  replica2:
+    <<: *storage
+    environment: [NODE_ID=replica2, DB_PATH=/data/db.sqlite, SERVICE=replica2]
+    volumes: [replica2-data:/data]
+  coordinator:
+    build: .
+    command: uvicorn backend.coordinator:app --host 0.0.0.0 --port 8000
+    environment: [SERVICE=coordinator]
+    ports: ['8001:8000']
+    restart: unless-stopped
+    networks: [resq]
+  rabbitmq:
+    image: rabbitmq:3.13-management-alpine
+    ports: ['15672:15672']
+    restart: unless-stopped
+    networks: [resq]
+  api:
+    build: .
+    environment: [COORDINATOR_URL=http://coordinator:8000, RABBITMQ_HOST=rabbitmq, SERVICE=api]
+    ports: ['8000:8000']
+    restart: unless-stopped
+    networks: [resq]
+  matcher:
+    build: .
+    command: python -m backend.matcher
+    environment: [COORDINATOR_URL=http://coordinator:8000, RABBITMQ_HOST=rabbitmq, SERVICE=matcher]
+    restart: unless-stopped
+    networks: [resq]
+  frontend:
+    build: ./frontend
+    ports: ['3000:80']
+    restart: unless-stopped
+    networks: [resq]
+networks:
+  resq:
+volumes:
+  shard0-data:
+  replica0-data:
+  shard1-data:
+  replica1-data:
+  shard2-data:
+  replica2-data:

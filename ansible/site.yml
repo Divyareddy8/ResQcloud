@@ -1,0 +1,5 @@
+- name: Configure ResQCloud Docker host
+  hosts: resqhosts
+  become: true
+  roles:
+    - docker_host
