@@ -20,6 +20,7 @@ def save(key,data):
   r=httpx.put(COORD+'/internal/data/'+key,json={'value':data},timeout=8)
   if not r.is_success:raise HTTPException(503,'Storage write unavailable')
  except httpx.HTTPError:raise HTTPException(503,'Storage coordinator unavailable')
+
 def scan(prefix):
     try:
         response = httpx.get(
@@ -27,6 +28,7 @@ def scan(prefix):
             timeout=12,
             follow_redirects=True
         )
+
         response.raise_for_status()
 
         return [
@@ -39,6 +41,7 @@ def scan(prefix):
             status_code=503,
             detail='Storage scan unavailable'
         )
+
 def publish(request_id):
  try:
   conn=pika.BlockingConnection(pika.ConnectionParameters(RABBIT,heartbeat=30,blocked_connection_timeout=3))
