@@ -1,64 +1,162 @@
+
+x-http-health: &http-health
+  test:
+    - CMD
+    - python
+    - -c
+    - "import urllib.request; urllib.request.urlopen('http://localhost:8000/health', timeout=3)"
+  interval: 15s
+  timeout: 5s
+  retries: 5
+  start_period: 10s
+
 x-storage: &storage
   build: .
   command: uvicorn backend.storage:app --host 0.0.0.0 --port 8000
   restart: unless-stopped
   networks: [resq]
+  healthcheck: *http-health
+
 services:
   shard0:
     <<: *storage
-    environment: [NODE_ID=shard0, DB_PATH=/data/db.sqlite, SERVICE=shard0]
-    volumes: [shard0-data:/data]
+    environment:
+      - NODE_ID=shard0
+      - DB_PATH=/data/db.sqlite
+      - SERVICE=shard0
+    volumes:
+      - shard0-data:/data
+
   replica0:
     <<: *storage
-    environment: [NODE_ID=replica0, DB_PATH=/data/db.sqlite, SERVICE=replica0]
-    volumes: [replica0-data:/data]
+    environment:
+      - NODE_ID=replica0
+      - DB_PATH=/data/db.sqlite
+      - SERVICE=replica0
+    volumes:
+      - replica0-data:/data
+
   shard1:
     <<: *storage
-    environment: [NODE_ID=shard1, DB_PATH=/data/db.sqlite, SERVICE=shard1]
-    volumes: [shard1-data:/data]
+    environment:
+      - NODE_ID=shard1
+      - DB_PATH=/data/db.sqlite
+      - SERVICE=shard1
+    volumes:
+      - shard1-data:/data
+
   replica1:
     <<: *storage
-    environment: [NODE_ID=replica1, DB_PATH=/data/db.sqlite, SERVICE=replica1]
-    volumes: [replica1-data:/data]
+    environment:
+      - NODE_ID=replica1
+      - DB_PATH=/data/db.sqlite
+      - SERVICE=replica1
+    volumes:
+      - replica1-data:/data
+
   shard2:
     <<: *storage
-    environment: [NODE_ID=shard2, DB_PATH=/data/db.sqlite, SERVICE=shard2]
-    volumes: [shard2-data:/data]
+    environment:
+      - NODE_ID=shard2
+      - DB_PATH=/data/db.sqlite
+      - SERVICE=shard2
+    volumes:
+      - shard2-data:/data
+
   replica2:
     <<: *storage
-    environment: [NODE_ID=replica2, DB_PATH=/data/db.sqlite, SERVICE=replica2]
-    volumes: [replica2-data:/data]
+    environment:
+      - NODE_ID=replica2
+      - DB_PATH=/data/db.sqlite
+      - SERVICE=replica2
+    volumes:
+      - replica2-data:/data
+
   coordinator:
     build: .
     command: uvicorn backend.coordinator:app --host 0.0.0.0 --port 8000
-    environment: [SERVICE=coordinator]
-    ports: ['8001:8000']
+    environment:
+      - SERVICE=coordinator
+    ports:
+      - "8001:8000"
     restart: unless-stopped
     networks: [resq]
+    healthcheck: *http-health
+    depends_on:
+      shard0:
+        condition: service_started
+      replica0:
+        condition: service_started
+      shard1:
+        condition: service_started
+      replica1:
+        condition: service_started
+      shard2:
+        condition: service_started
+      replica2:
+        condition: service_started
+
   rabbitmq:
     image: rabbitmq:3.13-management-alpine
-    ports: ['15672:15672']
+    hostname: rabbitmq
+    ports:
+      - "15672:15672"
     restart: unless-stopped
     networks: [resq]
+    volumes:
+      - rabbitmq-data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+
   api:
     build: .
-    environment: [COORDINATOR_URL=http://coordinator:8000, RABBITMQ_HOST=rabbitmq, SERVICE=api]
-    ports: ['8000:8000']
+    environment:
+      - COORDINATOR_URL=http://coordinator:8000
+      - RABBITMQ_HOST=rabbitmq
+      - SERVICE=api
+    ports:
+      - "8000:8000"
     restart: unless-stopped
     networks: [resq]
+    healthcheck: *http-health
+    depends_on:
+      coordinator:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+
   matcher:
     build: .
     command: python -m backend.matcher
-    environment: [COORDINATOR_URL=http://coordinator:8000, RABBITMQ_HOST=rabbitmq, SERVICE=matcher]
+    environment:
+      - COORDINATOR_URL=http://coordinator:8000
+      - RABBITMQ_HOST=rabbitmq
+      - SERVICE=matcher
     restart: unless-stopped
     networks: [resq]
+    depends_on:
+      coordinator:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+
   frontend:
     build: ./frontend
-    ports: ['3000:80']
+    ports:
+      - "3000:80"
     restart: unless-stopped
     networks: [resq]
+    depends_on:
+      api:
+        condition: service_healthy
+
 networks:
   resq:
+
 volumes:
   shard0-data:
   replica0-data:
@@ -66,3 +164,5 @@ volumes:
   replica1-data:
   shard2-data:
   replica2-data:
+  rabbitmq-data:
+
