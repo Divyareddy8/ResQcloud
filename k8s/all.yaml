@@ -1,314 +1,1659 @@
-apiVersion: v1
-kind: Namespace
-metadata: {name: resqcloud}
+{
+  "apiVersion": "v1",
+  "kind": "Namespace",
+  "metadata": {
+    "name": "resqcloud"
+  }
+}
 ---
-apiVersion: apps/v1
-kind: StatefulSet
-metadata: {name: shard0, namespace: resqcloud}
-spec:
-  serviceName: shard0
-  replicas: 1
-  selector:
-    matchLabels: {app: shard0}
-  template:
-    metadata:
-      labels: {app: shard0}
-    spec:
-      containers:
-      - name: storage
-        image: YOUR_DOCKERHUB_USERNAME/resqcloud:latest
-        command: ["uvicorn", "backend.storage:app", "--host", "0.0.0.0", "--port", "8000"]
-        env:
-        - {name: NODE_ID, value: "shard0"}
-        - {name: DB_PATH, value: "/data/db.sqlite"}
-        volumeMounts:
-        - {name: data, mountPath: /data}
-  volumeClaimTemplates:
-  - metadata: {name: data}
-    spec:
-      accessModes: [ReadWriteOnce]
-      resources:
-        requests: {storage: 1Gi}
+{
+  "apiVersion": "v1",
+  "kind": "ConfigMap",
+  "metadata": {
+    "name": "resqcloud-config",
+    "namespace": "resqcloud"
+  },
+  "data": {
+    "COORDINATOR_URL": "http://coordinator:8000",
+    "RABBITMQ_HOST": "rabbitmq",
+    "SHARDS": "http://shard0:8000,http://replica0:8000;http://shard1:8000,http://replica1:8000;http://shard2:8000,http://replica2:8000",
+    "PYTHONUNBUFFERED": "1"
+  }
+}
 ---
-apiVersion: v1
-kind: Service
-metadata: {name: shard0, namespace: resqcloud}
-spec:
-  selector: {app: shard0}
-  ports: [{port: 8000}]
+{
+  "apiVersion": "v1",
+  "kind": "ConfigMap",
+  "metadata": {
+    "name": "rabbitmq-config",
+    "namespace": "resqcloud"
+  },
+  "data": {
+    "rabbitmq.conf": "loopback_users.guest = false\nvm_memory_high_watermark.absolute = 256MiB\ndisk_free_limit.absolute = 100MB\n"
+  }
+}
 ---
-apiVersion: apps/v1
-kind: StatefulSet
-metadata: {name: replica0, namespace: resqcloud}
-spec:
-  serviceName: replica0
-  replicas: 1
-  selector:
-    matchLabels: {app: replica0}
-  template:
-    metadata:
-      labels: {app: replica0}
-    spec:
-      containers:
-      - name: storage
-        image: YOUR_DOCKERHUB_USERNAME/resqcloud:latest
-        command: ["uvicorn", "backend.storage:app", "--host", "0.0.0.0", "--port", "8000"]
-        env:
-        - {name: NODE_ID, value: "replica0"}
-        - {name: DB_PATH, value: "/data/db.sqlite"}
-        volumeMounts:
-        - {name: data, mountPath: /data}
-  volumeClaimTemplates:
-  - metadata: {name: data}
-    spec:
-      accessModes: [ReadWriteOnce]
-      resources:
-        requests: {storage: 1Gi}
+{
+  "apiVersion": "v1",
+  "kind": "Service",
+  "metadata": {
+    "name": "shard0",
+    "namespace": "resqcloud"
+  },
+  "spec": {
+    "selector": {
+      "app": "shard0"
+    },
+    "ports": [
+      {
+        "port": 8000,
+        "targetPort": 8000
+      }
+    ]
+  }
+}
 ---
-apiVersion: v1
-kind: Service
-metadata: {name: replica0, namespace: resqcloud}
-spec:
-  selector: {app: replica0}
-  ports: [{port: 8000}]
+{
+  "apiVersion": "v1",
+  "kind": "Service",
+  "metadata": {
+    "name": "shard0-headless",
+    "namespace": "resqcloud"
+  },
+  "spec": {
+    "selector": {
+      "app": "shard0"
+    },
+    "ports": [
+      {
+        "port": 8000,
+        "targetPort": 8000
+      }
+    ],
+    "clusterIP": "None"
+  }
+}
 ---
-apiVersion: apps/v1
-kind: StatefulSet
-metadata: {name: shard1, namespace: resqcloud}
-spec:
-  serviceName: shard1
-  replicas: 1
-  selector:
-    matchLabels: {app: shard1}
-  template:
-    metadata:
-      labels: {app: shard1}
-    spec:
-      containers:
-      - name: storage
-        image: YOUR_DOCKERHUB_USERNAME/resqcloud:latest
-        command: ["uvicorn", "backend.storage:app", "--host", "0.0.0.0", "--port", "8000"]
-        env:
-        - {name: NODE_ID, value: "shard1"}
-        - {name: DB_PATH, value: "/data/db.sqlite"}
-        volumeMounts:
-        - {name: data, mountPath: /data}
-  volumeClaimTemplates:
-  - metadata: {name: data}
-    spec:
-      accessModes: [ReadWriteOnce]
-      resources:
-        requests: {storage: 1Gi}
+{
+  "apiVersion": "apps/v1",
+  "kind": "StatefulSet",
+  "metadata": {
+    "name": "shard0",
+    "namespace": "resqcloud"
+  },
+  "spec": {
+    "serviceName": "shard0-headless",
+    "replicas": 1,
+    "selector": {
+      "matchLabels": {
+        "app": "shard0"
+      }
+    },
+    "template": {
+      "metadata": {
+        "labels": {
+          "app": "shard0"
+        }
+      },
+      "spec": {
+        "containers": [
+          {
+            "name": "shard0",
+            "image": "resqcloud-backend:v1",
+            "imagePullPolicy": "IfNotPresent",
+            "command": [
+              "uvicorn",
+              "backend.storage:app",
+              "--host",
+              "0.0.0.0",
+              "--port",
+              "8000"
+            ],
+            "ports": [
+              {
+                "containerPort": 8000
+              }
+            ],
+            "envFrom": [
+              {
+                "configMapRef": {
+                  "name": "resqcloud-config"
+                }
+              }
+            ],
+            "env": [
+              {
+                "name": "SERVICE",
+                "value": "shard0"
+              },
+              {
+                "name": "NODE_ID",
+                "value": "shard0"
+              },
+              {
+                "name": "DB_PATH",
+                "value": "/data/db.sqlite"
+              }
+            ],
+            "resources": {
+              "requests": {
+                "cpu": "50m",
+                "memory": "64Mi"
+              },
+              "limits": {
+                "cpu": "500m",
+                "memory": "192Mi"
+              }
+            },
+            "startupProbe": {
+              "httpGet": {
+                "path": "/health",
+                "port": 8000
+              },
+              "periodSeconds": 10,
+              "timeoutSeconds": 3,
+              "failureThreshold": 30
+            },
+            "readinessProbe": {
+              "httpGet": {
+                "path": "/health",
+                "port": 8000
+              },
+              "periodSeconds": 10,
+              "timeoutSeconds": 3,
+              "failureThreshold": 3
+            },
+            "livenessProbe": {
+              "httpGet": {
+                "path": "/health",
+                "port": 8000
+              },
+              "periodSeconds": 10,
+              "timeoutSeconds": 3,
+              "failureThreshold": 3
+            },
+            "volumeMounts": [
+              {
+                "name": "data",
+                "mountPath": "/data"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    "volumeClaimTemplates": [
+      {
+        "metadata": {
+          "name": "data"
+        },
+        "spec": {
+          "accessModes": [
+            "ReadWriteOnce"
+          ],
+          "storageClassName": "standard",
+          "resources": {
+            "requests": {
+              "storage": "1Gi"
+            }
+          }
+        }
+      }
+    ]
+  }
+}
 ---
-apiVersion: v1
-kind: Service
-metadata: {name: shard1, namespace: resqcloud}
-spec:
-  selector: {app: shard1}
-  ports: [{port: 8000}]
+{
+  "apiVersion": "v1",
+  "kind": "Service",
+  "metadata": {
+    "name": "replica0",
+    "namespace": "resqcloud"
+  },
+  "spec": {
+    "selector": {
+      "app": "replica0"
+    },
+    "ports": [
+      {
+        "port": 8000,
+        "targetPort": 8000
+      }
+    ]
+  }
+}
 ---
-apiVersion: apps/v1
-kind: StatefulSet
-metadata: {name: replica1, namespace: resqcloud}
-spec:
-  serviceName: replica1
-  replicas: 1
-  selector:
-    matchLabels: {app: replica1}
-  template:
-    metadata:
-      labels: {app: replica1}
-    spec:
-      containers:
-      - name: storage
-        image: YOUR_DOCKERHUB_USERNAME/resqcloud:latest
-        command: ["uvicorn", "backend.storage:app", "--host", "0.0.0.0", "--port", "8000"]
-        env:
-        - {name: NODE_ID, value: "replica1"}
-        - {name: DB_PATH, value: "/data/db.sqlite"}
-        volumeMounts:
-        - {name: data, mountPath: /data}
-  volumeClaimTemplates:
-  - metadata: {name: data}
-    spec:
-      accessModes: [ReadWriteOnce]
-      resources:
-        requests: {storage: 1Gi}
+{
+  "apiVersion": "v1",
+  "kind": "Service",
+  "metadata": {
+    "name": "replica0-headless",
+    "namespace": "resqcloud"
+  },
+  "spec": {
+    "selector": {
+      "app": "replica0"
+    },
+    "ports": [
+      {
+        "port": 8000,
+        "targetPort": 8000
+      }
+    ],
+    "clusterIP": "None"
+  }
+}
 ---
-apiVersion: v1
-kind: Service
-metadata: {name: replica1, namespace: resqcloud}
-spec:
-  selector: {app: replica1}
-  ports: [{port: 8000}]
+{
+  "apiVersion": "apps/v1",
+  "kind": "StatefulSet",
+  "metadata": {
+    "name": "replica0",
+    "namespace": "resqcloud"
+  },
+  "spec": {
+    "serviceName": "replica0-headless",
+    "replicas": 1,
+    "selector": {
+      "matchLabels": {
+        "app": "replica0"
+      }
+    },
+    "template": {
+      "metadata": {
+        "labels": {
+          "app": "replica0"
+        }
+      },
+      "spec": {
+        "containers": [
+          {
+            "name": "replica0",
+            "image": "resqcloud-backend:v1",
+            "imagePullPolicy": "IfNotPresent",
+            "command": [
+              "uvicorn",
+              "backend.storage:app",
+              "--host",
+              "0.0.0.0",
+              "--port",
+              "8000"
+            ],
+            "ports": [
+              {
+                "containerPort": 8000
+              }
+            ],
+            "envFrom": [
+              {
+                "configMapRef": {
+                  "name": "resqcloud-config"
+                }
+              }
+            ],
+            "env": [
+              {
+                "name": "SERVICE",
+                "value": "replica0"
+              },
+              {
+                "name": "NODE_ID",
+                "value": "replica0"
+              },
+              {
+                "name": "DB_PATH",
+                "value": "/data/db.sqlite"
+              }
+            ],
+            "resources": {
+              "requests": {
+                "cpu": "50m",
+                "memory": "64Mi"
+              },
+              "limits": {
+                "cpu": "500m",
+                "memory": "192Mi"
+              }
+            },
+            "startupProbe": {
+              "httpGet": {
+                "path": "/health",
+                "port": 8000
+              },
+              "periodSeconds": 10,
+              "timeoutSeconds": 3,
+              "failureThreshold": 30
+            },
+            "readinessProbe": {
+              "httpGet": {
+                "path": "/health",
+                "port": 8000
+              },
+              "periodSeconds": 10,
+              "timeoutSeconds": 3,
+              "failureThreshold": 3
+            },
+            "livenessProbe": {
+              "httpGet": {
+                "path": "/health",
+                "port": 8000
+              },
+              "periodSeconds": 10,
+              "timeoutSeconds": 3,
+              "failureThreshold": 3
+            },
+            "volumeMounts": [
+              {
+                "name": "data",
+                "mountPath": "/data"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    "volumeClaimTemplates": [
+      {
+        "metadata": {
+          "name": "data"
+        },
+        "spec": {
+          "accessModes": [
+            "ReadWriteOnce"
+          ],
+          "storageClassName": "standard",
+          "resources": {
+            "requests": {
+              "storage": "1Gi"
+            }
+          }
+        }
+      }
+    ]
+  }
+}
 ---
-apiVersion: apps/v1
-kind: StatefulSet
-metadata: {name: shard2, namespace: resqcloud}
-spec:
-  serviceName: shard2
-  replicas: 1
-  selector:
-    matchLabels: {app: shard2}
-  template:
-    metadata:
-      labels: {app: shard2}
-    spec:
-      containers:
-      - name: storage
-        image: YOUR_DOCKERHUB_USERNAME/resqcloud:latest
-        command: ["uvicorn", "backend.storage:app", "--host", "0.0.0.0", "--port", "8000"]
-        env:
-        - {name: NODE_ID, value: "shard2"}
-        - {name: DB_PATH, value: "/data/db.sqlite"}
-        volumeMounts:
-        - {name: data, mountPath: /data}
-  volumeClaimTemplates:
-  - metadata: {name: data}
-    spec:
-      accessModes: [ReadWriteOnce]
-      resources:
-        requests: {storage: 1Gi}
+{
+  "apiVersion": "v1",
+  "kind": "Service",
+  "metadata": {
+    "name": "shard1",
+    "namespace": "resqcloud"
+  },
+  "spec": {
+    "selector": {
+      "app": "shard1"
+    },
+    "ports": [
+      {
+        "port": 8000,
+        "targetPort": 8000
+      }
+    ]
+  }
+}
 ---
-apiVersion: v1
-kind: Service
-metadata: {name: shard2, namespace: resqcloud}
-spec:
-  selector: {app: shard2}
-  ports: [{port: 8000}]
+{
+  "apiVersion": "v1",
+  "kind": "Service",
+  "metadata": {
+    "name": "shard1-headless",
+    "namespace": "resqcloud"
+  },
+  "spec": {
+    "selector": {
+      "app": "shard1"
+    },
+    "ports": [
+      {
+        "port": 8000,
+        "targetPort": 8000
+      }
+    ],
+    "clusterIP": "None"
+  }
+}
 ---
-apiVersion: apps/v1
-kind: StatefulSet
-metadata: {name: replica2, namespace: resqcloud}
-spec:
-  serviceName: replica2
-  replicas: 1
-  selector:
-    matchLabels: {app: replica2}
-  template:
-    metadata:
-      labels: {app: replica2}
-    spec:
-      containers:
-      - name: storage
-        image: YOUR_DOCKERHUB_USERNAME/resqcloud:latest
-        command: ["uvicorn", "backend.storage:app", "--host", "0.0.0.0", "--port", "8000"]
-        env:
-        - {name: NODE_ID, value: "replica2"}
-        - {name: DB_PATH, value: "/data/db.sqlite"}
-        volumeMounts:
-        - {name: data, mountPath: /data}
-  volumeClaimTemplates:
-  - metadata: {name: data}
-    spec:
-      accessModes: [ReadWriteOnce]
-      resources:
-        requests: {storage: 1Gi}
+{
+  "apiVersion": "apps/v1",
+  "kind": "StatefulSet",
+  "metadata": {
+    "name": "shard1",
+    "namespace": "resqcloud"
+  },
+  "spec": {
+    "serviceName": "shard1-headless",
+    "replicas": 1,
+    "selector": {
+      "matchLabels": {
+        "app": "shard1"
+      }
+    },
+    "template": {
+      "metadata": {
+        "labels": {
+          "app": "shard1"
+        }
+      },
+      "spec": {
+        "containers": [
+          {
+            "name": "shard1",
+            "image": "resqcloud-backend:v1",
+            "imagePullPolicy": "IfNotPresent",
+            "command": [
+              "uvicorn",
+              "backend.storage:app",
+              "--host",
+              "0.0.0.0",
+              "--port",
+              "8000"
+            ],
+            "ports": [
+              {
+                "containerPort": 8000
+              }
+            ],
+            "envFrom": [
+              {
+                "configMapRef": {
+                  "name": "resqcloud-config"
+                }
+              }
+            ],
+            "env": [
+              {
+                "name": "SERVICE",
+                "value": "shard1"
+              },
+              {
+                "name": "NODE_ID",
+                "value": "shard1"
+              },
+              {
+                "name": "DB_PATH",
+                "value": "/data/db.sqlite"
+              }
+            ],
+            "resources": {
+              "requests": {
+                "cpu": "50m",
+                "memory": "64Mi"
+              },
+              "limits": {
+                "cpu": "500m",
+                "memory": "192Mi"
+              }
+            },
+            "startupProbe": {
+              "httpGet": {
+                "path": "/health",
+                "port": 8000
+              },
+              "periodSeconds": 10,
+              "timeoutSeconds": 3,
+              "failureThreshold": 30
+            },
+            "readinessProbe": {
+              "httpGet": {
+                "path": "/health",
+                "port": 8000
+              },
+              "periodSeconds": 10,
+              "timeoutSeconds": 3,
+              "failureThreshold": 3
+            },
+            "livenessProbe": {
+              "httpGet": {
+                "path": "/health",
+                "port": 8000
+              },
+              "periodSeconds": 10,
+              "timeoutSeconds": 3,
+              "failureThreshold": 3
+            },
+            "volumeMounts": [
+              {
+                "name": "data",
+                "mountPath": "/data"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    "volumeClaimTemplates": [
+      {
+        "metadata": {
+          "name": "data"
+        },
+        "spec": {
+          "accessModes": [
+            "ReadWriteOnce"
+          ],
+          "storageClassName": "standard",
+          "resources": {
+            "requests": {
+              "storage": "1Gi"
+            }
+          }
+        }
+      }
+    ]
+  }
+}
 ---
-apiVersion: v1
-kind: Service
-metadata: {name: replica2, namespace: resqcloud}
-spec:
-  selector: {app: replica2}
-  ports: [{port: 8000}]
+{
+  "apiVersion": "v1",
+  "kind": "Service",
+  "metadata": {
+    "name": "replica1",
+    "namespace": "resqcloud"
+  },
+  "spec": {
+    "selector": {
+      "app": "replica1"
+    },
+    "ports": [
+      {
+        "port": 8000,
+        "targetPort": 8000
+      }
+    ]
+  }
+}
 ---
-apiVersion: apps/v1
-kind: Deployment
-metadata: {name: api, namespace: resqcloud}
-spec:
-  replicas: 2
-  selector:
-    matchLabels: {app: api}
-  template:
-    metadata:
-      labels: {app: api}
-    spec:
-      containers:
-      - name: api
-        image: YOUR_DOCKERHUB_USERNAME/resqcloud:latest
-        command: ["uvicorn", "backend.api:app", "--host", "0.0.0.0", "--port", "8000"]
-        resources:
-          requests: {cpu: 100m, memory: 128Mi}
+{
+  "apiVersion": "v1",
+  "kind": "Service",
+  "metadata": {
+    "name": "replica1-headless",
+    "namespace": "resqcloud"
+  },
+  "spec": {
+    "selector": {
+      "app": "replica1"
+    },
+    "ports": [
+      {
+        "port": 8000,
+        "targetPort": 8000
+      }
+    ],
+    "clusterIP": "None"
+  }
+}
 ---
-apiVersion: v1
-kind: Service
-metadata: {name: api, namespace: resqcloud}
-spec:
-  selector: {app: api}
-  ports: [{port: 8000}]
+{
+  "apiVersion": "apps/v1",
+  "kind": "StatefulSet",
+  "metadata": {
+    "name": "replica1",
+    "namespace": "resqcloud"
+  },
+  "spec": {
+    "serviceName": "replica1-headless",
+    "replicas": 1,
+    "selector": {
+      "matchLabels": {
+        "app": "replica1"
+      }
+    },
+    "template": {
+      "metadata": {
+        "labels": {
+          "app": "replica1"
+        }
+      },
+      "spec": {
+        "containers": [
+          {
+            "name": "replica1",
+            "image": "resqcloud-backend:v1",
+            "imagePullPolicy": "IfNotPresent",
+            "command": [
+              "uvicorn",
+              "backend.storage:app",
+              "--host",
+              "0.0.0.0",
+              "--port",
+              "8000"
+            ],
+            "ports": [
+              {
+                "containerPort": 8000
+              }
+            ],
+            "envFrom": [
+              {
+                "configMapRef": {
+                  "name": "resqcloud-config"
+                }
+              }
+            ],
+            "env": [
+              {
+                "name": "SERVICE",
+                "value": "replica1"
+              },
+              {
+                "name": "NODE_ID",
+                "value": "replica1"
+              },
+              {
+                "name": "DB_PATH",
+                "value": "/data/db.sqlite"
+              }
+            ],
+            "resources": {
+              "requests": {
+                "cpu": "50m",
+                "memory": "64Mi"
+              },
+              "limits": {
+                "cpu": "500m",
+                "memory": "192Mi"
+              }
+            },
+            "startupProbe": {
+              "httpGet": {
+                "path": "/health",
+                "port": 8000
+              },
+              "periodSeconds": 10,
+              "timeoutSeconds": 3,
+              "failureThreshold": 30
+            },
+            "readinessProbe": {
+              "httpGet": {
+                "path": "/health",
+                "port": 8000
+              },
+              "periodSeconds": 10,
+              "timeoutSeconds": 3,
+              "failureThreshold": 3
+            },
+            "livenessProbe": {
+              "httpGet": {
+                "path": "/health",
+                "port": 8000
+              },
+              "periodSeconds": 10,
+              "timeoutSeconds": 3,
+              "failureThreshold": 3
+            },
+            "volumeMounts": [
+              {
+                "name": "data",
+                "mountPath": "/data"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    "volumeClaimTemplates": [
+      {
+        "metadata": {
+          "name": "data"
+        },
+        "spec": {
+          "accessModes": [
+            "ReadWriteOnce"
+          ],
+          "storageClassName": "standard",
+          "resources": {
+            "requests": {
+              "storage": "1Gi"
+            }
+          }
+        }
+      }
+    ]
+  }
+}
 ---
-apiVersion: apps/v1
-kind: Deployment
-metadata: {name: coordinator, namespace: resqcloud}
-spec:
-  replicas: 1
-  selector:
-    matchLabels: {app: coordinator}
-  template:
-    metadata:
-      labels: {app: coordinator}
-    spec:
-      containers:
-      - name: coordinator
-        image: YOUR_DOCKERHUB_USERNAME/resqcloud:latest
-        command: ["uvicorn", "backend.coordinator:app", "--host", "0.0.0.0", "--port", "8000"]
-        resources:
-          requests: {cpu: 100m, memory: 128Mi}
+{
+  "apiVersion": "v1",
+  "kind": "Service",
+  "metadata": {
+    "name": "shard2",
+    "namespace": "resqcloud"
+  },
+  "spec": {
+    "selector": {
+      "app": "shard2"
+    },
+    "ports": [
+      {
+        "port": 8000,
+        "targetPort": 8000
+      }
+    ]
+  }
+}
 ---
-apiVersion: v1
-kind: Service
-metadata: {name: coordinator, namespace: resqcloud}
-spec:
-  selector: {app: coordinator}
-  ports: [{port: 8000}]
+{
+  "apiVersion": "v1",
+  "kind": "Service",
+  "metadata": {
+    "name": "shard2-headless",
+    "namespace": "resqcloud"
+  },
+  "spec": {
+    "selector": {
+      "app": "shard2"
+    },
+    "ports": [
+      {
+        "port": 8000,
+        "targetPort": 8000
+      }
+    ],
+    "clusterIP": "None"
+  }
+}
 ---
-apiVersion: apps/v1
-kind: Deployment
-metadata: {name: matcher, namespace: resqcloud}
-spec:
-  replicas: 1
-  selector:
-    matchLabels: {app: matcher}
-  template:
-    metadata:
-      labels: {app: matcher}
-    spec:
-      containers:
-      - name: matcher
-        image: YOUR_DOCKERHUB_USERNAME/resqcloud:latest
-        command: ["python", "-m", "backend.matcher"]
+{
+  "apiVersion": "apps/v1",
+  "kind": "StatefulSet",
+  "metadata": {
+    "name": "shard2",
+    "namespace": "resqcloud"
+  },
+  "spec": {
+    "serviceName": "shard2-headless",
+    "replicas": 1,
+    "selector": {
+      "matchLabels": {
+        "app": "shard2"
+      }
+    },
+    "template": {
+      "metadata": {
+        "labels": {
+          "app": "shard2"
+        }
+      },
+      "spec": {
+        "containers": [
+          {
+            "name": "shard2",
+            "image": "resqcloud-backend:v1",
+            "imagePullPolicy": "IfNotPresent",
+            "command": [
+              "uvicorn",
+              "backend.storage:app",
+              "--host",
+              "0.0.0.0",
+              "--port",
+              "8000"
+            ],
+            "ports": [
+              {
+                "containerPort": 8000
+              }
+            ],
+            "envFrom": [
+              {
+                "configMapRef": {
+                  "name": "resqcloud-config"
+                }
+              }
+            ],
+            "env": [
+              {
+                "name": "SERVICE",
+                "value": "shard2"
+              },
+              {
+                "name": "NODE_ID",
+                "value": "shard2"
+              },
+              {
+                "name": "DB_PATH",
+                "value": "/data/db.sqlite"
+              }
+            ],
+            "resources": {
+              "requests": {
+                "cpu": "50m",
+                "memory": "64Mi"
+              },
+              "limits": {
+                "cpu": "500m",
+                "memory": "192Mi"
+              }
+            },
+            "startupProbe": {
+              "httpGet": {
+                "path": "/health",
+                "port": 8000
+              },
+              "periodSeconds": 10,
+              "timeoutSeconds": 3,
+              "failureThreshold": 30
+            },
+            "readinessProbe": {
+              "httpGet": {
+                "path": "/health",
+                "port": 8000
+              },
+              "periodSeconds": 10,
+              "timeoutSeconds": 3,
+              "failureThreshold": 3
+            },
+            "livenessProbe": {
+              "httpGet": {
+                "path": "/health",
+                "port": 8000
+              },
+              "periodSeconds": 10,
+              "timeoutSeconds": 3,
+              "failureThreshold": 3
+            },
+            "volumeMounts": [
+              {
+                "name": "data",
+                "mountPath": "/data"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    "volumeClaimTemplates": [
+      {
+        "metadata": {
+          "name": "data"
+        },
+        "spec": {
+          "accessModes": [
+            "ReadWriteOnce"
+          ],
+          "storageClassName": "standard",
+          "resources": {
+            "requests": {
+              "storage": "1Gi"
+            }
+          }
+        }
+      }
+    ]
+  }
+}
 ---
-apiVersion: apps/v1
-kind: Deployment
-metadata: {name: rabbitmq, namespace: resqcloud}
-spec:
-  replicas: 1
-  selector:
-    matchLabels: {app: rabbitmq}
-  template:
-    metadata:
-      labels: {app: rabbitmq}
-    spec:
-      containers:
-      - name: rabbitmq
-        image: rabbitmq:3.13-management-alpine
+{
+  "apiVersion": "v1",
+  "kind": "Service",
+  "metadata": {
+    "name": "replica2",
+    "namespace": "resqcloud"
+  },
+  "spec": {
+    "selector": {
+      "app": "replica2"
+    },
+    "ports": [
+      {
+        "port": 8000,
+        "targetPort": 8000
+      }
+    ]
+  }
+}
 ---
-apiVersion: v1
-kind: Service
-metadata: {name: rabbitmq, namespace: resqcloud}
-spec:
-  selector: {app: rabbitmq}
-  ports: [{port: 5672, name: amqp}, {port: 15672, name: management}]
+{
+  "apiVersion": "v1",
+  "kind": "Service",
+  "metadata": {
+    "name": "replica2-headless",
+    "namespace": "resqcloud"
+  },
+  "spec": {
+    "selector": {
+      "app": "replica2"
+    },
+    "ports": [
+      {
+        "port": 8000,
+        "targetPort": 8000
+      }
+    ],
+    "clusterIP": "None"
+  }
+}
 ---
-apiVersion: autoscaling/v2
-kind: HorizontalPodAutoscaler
-metadata: {name: api-hpa, namespace: resqcloud}
-spec:
-  scaleTargetRef: {apiVersion: apps/v1, kind: Deployment, name: api}
-  minReplicas: 2
-  maxReplicas: 5
-  metrics:
-  - type: Resource
-    resource:
-      name: cpu
-      target: {type: Utilization, averageUtilization: 70}
+{
+  "apiVersion": "apps/v1",
+  "kind": "StatefulSet",
+  "metadata": {
+    "name": "replica2",
+    "namespace": "resqcloud"
+  },
+  "spec": {
+    "serviceName": "replica2-headless",
+    "replicas": 1,
+    "selector": {
+      "matchLabels": {
+        "app": "replica2"
+      }
+    },
+    "template": {
+      "metadata": {
+        "labels": {
+          "app": "replica2"
+        }
+      },
+      "spec": {
+        "containers": [
+          {
+            "name": "replica2",
+            "image": "resqcloud-backend:v1",
+            "imagePullPolicy": "IfNotPresent",
+            "command": [
+              "uvicorn",
+              "backend.storage:app",
+              "--host",
+              "0.0.0.0",
+              "--port",
+              "8000"
+            ],
+            "ports": [
+              {
+                "containerPort": 8000
+              }
+            ],
+            "envFrom": [
+              {
+                "configMapRef": {
+                  "name": "resqcloud-config"
+                }
+              }
+            ],
+            "env": [
+              {
+                "name": "SERVICE",
+                "value": "replica2"
+              },
+              {
+                "name": "NODE_ID",
+                "value": "replica2"
+              },
+              {
+                "name": "DB_PATH",
+                "value": "/data/db.sqlite"
+              }
+            ],
+            "resources": {
+              "requests": {
+                "cpu": "50m",
+                "memory": "64Mi"
+              },
+              "limits": {
+                "cpu": "500m",
+                "memory": "192Mi"
+              }
+            },
+            "startupProbe": {
+              "httpGet": {
+                "path": "/health",
+                "port": 8000
+              },
+              "periodSeconds": 10,
+              "timeoutSeconds": 3,
+              "failureThreshold": 30
+            },
+            "readinessProbe": {
+              "httpGet": {
+                "path": "/health",
+                "port": 8000
+              },
+              "periodSeconds": 10,
+              "timeoutSeconds": 3,
+              "failureThreshold": 3
+            },
+            "livenessProbe": {
+              "httpGet": {
+                "path": "/health",
+                "port": 8000
+              },
+              "periodSeconds": 10,
+              "timeoutSeconds": 3,
+              "failureThreshold": 3
+            },
+            "volumeMounts": [
+              {
+                "name": "data",
+                "mountPath": "/data"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    "volumeClaimTemplates": [
+      {
+        "metadata": {
+          "name": "data"
+        },
+        "spec": {
+          "accessModes": [
+            "ReadWriteOnce"
+          ],
+          "storageClassName": "standard",
+          "resources": {
+            "requests": {
+              "storage": "1Gi"
+            }
+          }
+        }
+      }
+    ]
+  }
+}
+---
+{
+  "apiVersion": "v1",
+  "kind": "Service",
+  "metadata": {
+    "name": "coordinator",
+    "namespace": "resqcloud"
+  },
+  "spec": {
+    "selector": {
+      "app": "coordinator"
+    },
+    "ports": [
+      {
+        "port": 8000,
+        "targetPort": 8000
+      }
+    ]
+  }
+}
+---
+{
+  "apiVersion": "apps/v1",
+  "kind": "Deployment",
+  "metadata": {
+    "name": "coordinator",
+    "namespace": "resqcloud"
+  },
+  "spec": {
+    "replicas": 1,
+    "selector": {
+      "matchLabels": {
+        "app": "coordinator"
+      }
+    },
+    "template": {
+      "metadata": {
+        "labels": {
+          "app": "coordinator"
+        }
+      },
+      "spec": {
+        "containers": [
+          {
+            "name": "coordinator",
+            "image": "resqcloud-backend:v1",
+            "imagePullPolicy": "IfNotPresent",
+            "command": [
+              "uvicorn",
+              "backend.coordinator:app",
+              "--host",
+              "0.0.0.0",
+              "--port",
+              "8000"
+            ],
+            "ports": [
+              {
+                "containerPort": 8000
+              }
+            ],
+            "envFrom": [
+              {
+                "configMapRef": {
+                  "name": "resqcloud-config"
+                }
+              }
+            ],
+            "env": [
+              {
+                "name": "SERVICE",
+                "value": "coordinator"
+              }
+            ],
+            "resources": {
+              "requests": {
+                "cpu": "100m",
+                "memory": "96Mi"
+              },
+              "limits": {
+                "cpu": "500m",
+                "memory": "256Mi"
+              }
+            },
+            "startupProbe": {
+              "httpGet": {
+                "path": "/health",
+                "port": 8000
+              },
+              "periodSeconds": 10,
+              "timeoutSeconds": 3,
+              "failureThreshold": 30
+            },
+            "readinessProbe": {
+              "httpGet": {
+                "path": "/health",
+                "port": 8000
+              },
+              "periodSeconds": 10,
+              "timeoutSeconds": 3,
+              "failureThreshold": 3
+            },
+            "livenessProbe": {
+              "httpGet": {
+                "path": "/health",
+                "port": 8000
+              },
+              "periodSeconds": 10,
+              "timeoutSeconds": 3,
+              "failureThreshold": 3
+            }
+          }
+        ]
+      }
+    }
+  }
+}
+---
+{
+  "apiVersion": "v1",
+  "kind": "Service",
+  "metadata": {
+    "name": "rabbitmq",
+    "namespace": "resqcloud"
+  },
+  "spec": {
+    "selector": {
+      "app": "rabbitmq"
+    },
+    "ports": [
+      {
+        "name": "amqp",
+        "port": 5672,
+        "targetPort": 5672
+      },
+      {
+        "name": "management",
+        "port": 15672,
+        "targetPort": 15672
+      }
+    ]
+  }
+}
+---
+{
+  "apiVersion": "v1",
+  "kind": "Service",
+  "metadata": {
+    "name": "rabbitmq-headless",
+    "namespace": "resqcloud"
+  },
+  "spec": {
+    "selector": {
+      "app": "rabbitmq"
+    },
+    "ports": [
+      {
+        "name": "amqp",
+        "port": 5672,
+        "targetPort": 5672
+      },
+      {
+        "name": "management",
+        "port": 15672,
+        "targetPort": 15672
+      }
+    ],
+    "clusterIP": "None"
+  }
+}
+---
+{
+  "apiVersion": "apps/v1",
+  "kind": "StatefulSet",
+  "metadata": {
+    "name": "rabbitmq",
+    "namespace": "resqcloud"
+  },
+  "spec": {
+    "serviceName": "rabbitmq-headless",
+    "replicas": 1,
+    "selector": {
+      "matchLabels": {
+        "app": "rabbitmq"
+      }
+    },
+    "template": {
+      "metadata": {
+        "labels": {
+          "app": "rabbitmq"
+        }
+      },
+      "spec": {
+        "containers": [
+          {
+            "name": "rabbitmq",
+            "image": "rabbitmq:3.13-management-alpine",
+            "imagePullPolicy": "IfNotPresent",
+            "ports": [
+              {
+                "containerPort": 5672
+              },
+              {
+                "containerPort": 15672
+              }
+            ],
+            "env": [
+              {
+                "name": "RABBITMQ_NODENAME",
+                "value": "rabbit@rabbitmq-0"
+              }
+            ],
+            "resources": {
+              "requests": {
+                "cpu": "100m",
+                "memory": "256Mi"
+              },
+              "limits": {
+                "cpu": "750m",
+                "memory": "512Mi"
+              }
+            },
+            "volumeMounts": [
+              {
+                "name": "data",
+                "mountPath": "/var/lib/rabbitmq"
+              },
+              {
+                "name": "rabbit-config",
+                "mountPath": "/etc/rabbitmq/conf.d/90-resqcloud.conf",
+                "subPath": "rabbitmq.conf"
+              }
+            ],
+            "startupProbe": {
+              "exec": {
+                "command": [
+                  "rabbitmq-diagnostics",
+                  "-q",
+                  "ping"
+                ]
+              },
+              "periodSeconds": 15,
+              "timeoutSeconds": 10,
+              "failureThreshold": 30
+            },
+            "readinessProbe": {
+              "exec": {
+                "command": [
+                  "rabbitmq-diagnostics",
+                  "-q",
+                  "ping"
+                ]
+              },
+              "periodSeconds": 15,
+              "timeoutSeconds": 10,
+              "failureThreshold": 5
+            },
+            "livenessProbe": {
+              "exec": {
+                "command": [
+                  "rabbitmq-diagnostics",
+                  "-q",
+                  "ping"
+                ]
+              },
+              "periodSeconds": 15,
+              "timeoutSeconds": 10,
+              "failureThreshold": 5
+            }
+          }
+        ],
+        "volumes": [
+          {
+            "name": "rabbit-config",
+            "configMap": {
+              "name": "rabbitmq-config"
+            }
+          }
+        ]
+      }
+    },
+    "volumeClaimTemplates": [
+      {
+        "metadata": {
+          "name": "data"
+        },
+        "spec": {
+          "accessModes": [
+            "ReadWriteOnce"
+          ],
+          "storageClassName": "standard",
+          "resources": {
+            "requests": {
+              "storage": "1Gi"
+            }
+          }
+        }
+      }
+    ]
+  }
+}
+---
+{
+  "apiVersion": "v1",
+  "kind": "Service",
+  "metadata": {
+    "name": "api",
+    "namespace": "resqcloud"
+  },
+  "spec": {
+    "selector": {
+      "app": "api"
+    },
+    "ports": [
+      {
+        "port": 8000,
+        "targetPort": 8000
+      }
+    ]
+  }
+}
+---
+{
+  "apiVersion": "apps/v1",
+  "kind": "Deployment",
+  "metadata": {
+    "name": "api",
+    "namespace": "resqcloud"
+  },
+  "spec": {
+    "replicas": 2,
+    "selector": {
+      "matchLabels": {
+        "app": "api"
+      }
+    },
+    "template": {
+      "metadata": {
+        "labels": {
+          "app": "api"
+        }
+      },
+      "spec": {
+        "containers": [
+          {
+            "name": "api",
+            "image": "resqcloud-backend:v1",
+            "imagePullPolicy": "IfNotPresent",
+            "command": [
+              "uvicorn",
+              "backend.api:app",
+              "--host",
+              "0.0.0.0",
+              "--port",
+              "8000"
+            ],
+            "ports": [
+              {
+                "containerPort": 8000
+              }
+            ],
+            "envFrom": [
+              {
+                "configMapRef": {
+                  "name": "resqcloud-config"
+                }
+              }
+            ],
+            "env": [
+              {
+                "name": "SERVICE",
+                "value": "api"
+              }
+            ],
+            "resources": {
+              "requests": {
+                "cpu": "100m",
+                "memory": "96Mi"
+              },
+              "limits": {
+                "cpu": "500m",
+                "memory": "192Mi"
+              }
+            },
+            "startupProbe": {
+              "httpGet": {
+                "path": "/health",
+                "port": 8000
+              },
+              "periodSeconds": 10,
+              "timeoutSeconds": 3,
+              "failureThreshold": 30
+            },
+            "readinessProbe": {
+              "httpGet": {
+                "path": "/health",
+                "port": 8000
+              },
+              "periodSeconds": 10,
+              "timeoutSeconds": 3,
+              "failureThreshold": 3
+            },
+            "livenessProbe": {
+              "httpGet": {
+                "path": "/health",
+                "port": 8000
+              },
+              "periodSeconds": 10,
+              "timeoutSeconds": 3,
+              "failureThreshold": 3
+            }
+          }
+        ]
+      }
+    }
+  }
+}
+---
+{
+  "apiVersion": "apps/v1",
+  "kind": "Deployment",
+  "metadata": {
+    "name": "matcher",
+    "namespace": "resqcloud"
+  },
+  "spec": {
+    "replicas": 1,
+    "selector": {
+      "matchLabels": {
+        "app": "matcher"
+      }
+    },
+    "template": {
+      "metadata": {
+        "labels": {
+          "app": "matcher"
+        }
+      },
+      "spec": {
+        "containers": [
+          {
+            "name": "matcher",
+            "image": "resqcloud-backend:v1",
+            "imagePullPolicy": "IfNotPresent",
+            "command": [
+              "python",
+              "-m",
+              "backend.matcher"
+            ],
+            "envFrom": [
+              {
+                "configMapRef": {
+                  "name": "resqcloud-config"
+                }
+              }
+            ],
+            "env": [
+              {
+                "name": "SERVICE",
+                "value": "matcher"
+              }
+            ],
+            "resources": {
+              "requests": {
+                "cpu": "50m",
+                "memory": "64Mi"
+              },
+              "limits": {
+                "cpu": "500m",
+                "memory": "192Mi"
+              }
+            }
+          }
+        ]
+      }
+    },
+    "strategy": {
+      "type": "Recreate"
+    }
+  }
+}
+---
+{
+  "apiVersion": "v1",
+  "kind": "Service",
+  "metadata": {
+    "name": "frontend",
+    "namespace": "resqcloud"
+  },
+  "spec": {
+    "selector": {
+      "app": "frontend"
+    },
+    "ports": [
+      {
+        "port": 80,
+        "targetPort": 80
+      }
+    ]
+  }
+}
+---
+{
+  "apiVersion": "apps/v1",
+  "kind": "Deployment",
+  "metadata": {
+    "name": "frontend",
+    "namespace": "resqcloud"
+  },
+  "spec": {
+    "replicas": 1,
+    "selector": {
+      "matchLabels": {
+        "app": "frontend"
+      }
+    },
+    "template": {
+      "metadata": {
+        "labels": {
+          "app": "frontend"
+        }
+      },
+      "spec": {
+        "containers": [
+          {
+            "name": "frontend",
+            "image": "resqcloud-frontend:v1",
+            "imagePullPolicy": "IfNotPresent",
+            "ports": [
+              {
+                "containerPort": 80
+              }
+            ],
+            "resources": {
+              "requests": {
+                "cpu": "25m",
+                "memory": "32Mi"
+              },
+              "limits": {
+                "cpu": "200m",
+                "memory": "64Mi"
+              }
+            },
+            "startupProbe": {
+              "httpGet": {
+                "path": "/",
+                "port": 80
+              },
+              "periodSeconds": 10,
+              "timeoutSeconds": 3,
+              "failureThreshold": 30
+            },
+            "readinessProbe": {
+              "httpGet": {
+                "path": "/",
+                "port": 80
+              },
+              "periodSeconds": 10,
+              "timeoutSeconds": 3,
+              "failureThreshold": 3
+            },
+            "livenessProbe": {
+              "httpGet": {
+                "path": "/",
+                "port": 80
+              },
+              "periodSeconds": 10,
+              "timeoutSeconds": 3,
+              "failureThreshold": 3
+            }
+          }
+        ]
+      }
+    }
+  }
+}
+---
+{
+  "apiVersion": "autoscaling/v2",
+  "kind": "HorizontalPodAutoscaler",
+  "metadata": {
+    "name": "api-hpa",
+    "namespace": "resqcloud"
+  },
+  "spec": {
+    "scaleTargetRef": {
+      "apiVersion": "apps/v1",
+      "kind": "Deployment",
+      "name": "api"
+    },
+    "minReplicas": 2,
+    "maxReplicas": 5,
+    "metrics": [
+      {
+        "type": "Resource",
+        "resource": {
+          "name": "cpu",
+          "target": {
+            "type": "Utilization",
+            "averageUtilization": 70
+          }
+        }
+      }
+    ]
+  }
+}
