@@ -11,8 +11,9 @@ TYPES={'water','food','medicine','transportation','shelter'}
 def now():return datetime.datetime.now(datetime.timezone.utc).isoformat()
 def get_record(key):
  try:
-  r=httpx.get(COORD+'/internal/data/'+key,timeout=5)
-  if r.status_code!=200:raise HTTPException(404,'Record not found or unavailable')
+  r=httpx.get(COORD+'/internal/data/'+key,timeout=10)
+  if r.status_code==404:raise HTTPException(404,'Record not found')
+  if r.status_code!=200:raise HTTPException(503,'Storage unavailable')
   return r.json()['value']
  except httpx.HTTPError:raise HTTPException(503,'Storage coordinator unavailable')
 def save(key,data):

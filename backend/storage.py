@@ -1,4 +1,5 @@
 import os, sqlite3, threading, json, time
+import httpx
 from fastapi import FastAPI,HTTPException
 from pydantic import BaseModel
 from backend.common import event
@@ -18,6 +19,17 @@ class Record(BaseModel):
 def startup():
  with connect() as c:pass
  event('node_started',node=NODE)
+ def heartbeat():
+  coordinator=os.getenv('COORDINATOR_URL','http://coordinator:8000')
+  registered=False
+  while True:
+   try:
+    endpoint='heartbeat' if registered else 'register'
+    r=httpx.post(coordinator+'/internal/nodes/'+endpoint,json={'node':NODE},timeout=3)
+    r.raise_for_status();registered=True
+   except httpx.HTTPError:registered=False
+   time.sleep(3)
+ threading.Thread(target=heartbeat,daemon=True).start()
 @app.get('/health')
 def health():return {'status':'ok','node':NODE}
 @app.put('/internal/data/{key:path}')
