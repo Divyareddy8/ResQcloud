@@ -1,11 +1,71 @@
-- name: Install Docker and prerequisites (Ubuntu)
+---
+- name: Install system prerequisites
   ansible.builtin.apt:
-    name: [docker.io, docker-compose-v2, python3-pip, curl]
+    name:
+      - python3-pip
+      - curl
     state: present
     update_cache: true
-  when: ansible_os_family == 'Debian'
-- name: Start Docker daemon
+    cache_valid_time: 86400
+
+- name: Check existing Docker installation
+  ansible.builtin.command: docker --version
+  register: docker_check
+  changed_when: false
+  failed_when: false
+
+- name: Install Docker when missing
+  ansible.builtin.apt:
+    name: docker.io
+    state: present
+  when: docker_check.rc != 0
+
+- name: Check existing Docker Compose installation
+  ansible.builtin.command: docker compose version
+  register: compose_check
+  changed_when: false
+  failed_when: false
+
+- name: Install Docker Compose when missing
+  ansible.builtin.apt:
+    name: docker-compose-v2
+    state: present
+  when: compose_check.rc != 0
+
+- name: Ensure Docker daemon is running and enabled
   ansible.builtin.service:
     name: docker
     state: started
     enabled: true
+
+- name: Create ResQCloud configuration directory
+  ansible.builtin.file:
+    path: /etc/resqcloud
+    state: directory
+    owner: root
+    group: root
+    mode: '0755'
+
+- name: Deploy ResQCloud host configuration
+  ansible.builtin.template:
+    src: host-info.j2
+    dest: /etc/resqcloud/host-info.conf
+    owner: root
+    group: root
+    mode: '0644'
+
+- name: Verify Docker installation
+  ansible.builtin.command: docker --version
+  register: docker_version
+  changed_when: false
+
+- name: Verify Docker Compose installation
+  ansible.builtin.command: docker compose version
+  register: compose_version
+  changed_when: false
+
+- name: Display installed Docker versions
+  ansible.builtin.debug:
+    msg:
+      - "{{ docker_version.stdout }}"
+      - "{{ compose_version.stdout }}"
